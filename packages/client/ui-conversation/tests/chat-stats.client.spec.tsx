@@ -27,7 +27,12 @@ class ResizeObserverStub {
   disconnect(): void {}
 }
 
-beforeEach(() => { vi.stubGlobal('ResizeObserver', ResizeObserverStub) })
+beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+  // 固定到空闲时段（2026-08-01 为周六），价格组断言才与时段无关
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-08-01T00:00:00Z'))
+})
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
@@ -200,7 +205,7 @@ describe('StatsLine', () => {
     const view = render(<StatsLine {...props(source)} />)
     // No timing on the fixture: the duration group drops out whole. Tokens come
     // from the projection, so paging the window cannot change them.
-    expect(view.container.textContent).toBe('1 turns · 1 steps| Cache hit 90%| Input 100 tok · Output 5 tok')
+    expect(view.container.textContent).toBe('1 turns · 1 steps| Cache hit 90%| Input 100 tok · Output 5 tok| ≈ ¥0.000042')
     const empty = makeSource()
     const emptyView = render(<StatsLine {...props(empty.source, {
       tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
@@ -245,7 +250,7 @@ describe('StatsLine', () => {
     expect(view.container.querySelector('[role="tooltip"]')).toBeNull()
     act(() => { vi.advanceTimersByTime(1) })
     expect(view.container.querySelector('[role="tooltip"]')?.textContent)
-      .toBe('1 turns · 1 steps | Cache hit 99.95% | Input 10K tok · Output 1 tok')
+      .toBe('1 turns · 1 steps | Cache hit 99.95% | Input 10K tok · Output 1 tok | ≈ ¥0.000512')
   })
 
   it('suppresses the tooltip while the row fits without truncation', () => {
@@ -275,7 +280,7 @@ describe('StatsLine', () => {
     const { source } = makeSource({ nodes: [timed] })
     const view = render(<StatsLine {...props(source, { tokenUsage: tokenUsage(9_995, 5) })} t={t} />)
     expect(view.container.textContent)
-      .toBe('1 轮 · 1 步| LLM 3.8s| 首 token 平均 0.8s · 20 tok/s| 缓存命中 99.95%| 输入 10K tok · 输出 1 tok')
+      .toBe('1 轮 · 1 步| LLM 3.8s| 首 token 平均 0.8s · 20 tok/s| 缓存命中 99.95%| 输入 10K tok · 输出 1 tok| ≈ ¥0.000512')
   })
 
   it('renders without ResizeObserver support', () => {
@@ -292,7 +297,7 @@ describe('StatsLine', () => {
     })} />)
     // Context occupancy lives on the composer's ContextMeter ring, not here.
     expect(view.container.textContent)
-      .toBe('Cache hit 90%| Input 100 tok · Output 5 tok')
+      .toBe('Cache hit 90%| Input 100 tok · Output 5 tok| ≈ ¥0.000042')
   })
 
   it('computes context occupancy only when both a numerator and capacity are known', () => {
@@ -328,7 +333,7 @@ describe('StatsLine', () => {
       sessionStats: sessionStats({ turns: 10, steps: 89 }),
     })} />)
     expect(view.container.textContent)
-      .toBe('10 turns · 89 steps| Cache hit 90%| Input 100 tok · Output 5 tok')
+      .toBe('10 turns · 89 steps| Cache hit 90%| Input 100 tok · Output 5 tok| ≈ ¥0.000042')
   })
 
   it('treats a defined zero-count projection as empty, not as fallback', () => {
@@ -362,7 +367,7 @@ describe('StatsLine', () => {
       sessionStats: sessionStats({ turns: 7, steps: 44 }),
     })} />)
     expect(view.container.textContent)
-      .toBe('7 turns · 44 steps| Cache hit 90%| Input 100 tok · Output 5 tok')
+      .toBe('7 turns · 44 steps| Cache hit 90%| Input 100 tok · Output 5 tok| ≈ ¥0.000042')
   })
 
   it('renders whole-log wall times and speeds from the projection, not the loaded window', () => {
@@ -378,7 +383,7 @@ describe('StatsLine', () => {
       }),
     })} />)
     expect(view.container.textContent).toBe(
-      '200 turns · 200 steps| LLM 1m40s · Tool call 1m2s| TTFT avg 0.8s · 20 tok/s| Cache hit 90%| Input 100 tok · Output 5 tok',
+      '200 turns · 200 steps| LLM 1m40s · Tool call 1m2s| TTFT avg 0.8s · 20 tok/s| Cache hit 90%| Input 100 tok · Output 5 tok| ≈ ¥0.000042',
     )
   })
 
@@ -387,7 +392,7 @@ describe('StatsLine', () => {
     const view = render(<StatsLine {...props(source, {
       tokenUsage: { uncachedInputTokens: 0, outputTokens: 7, cacheReadTokens: 0, cacheWriteTokens: 0 },
     })} />)
-    expect(view.container.textContent).toBe('1 turns · 1 steps| Input 0 tok · Output 7 tok')
+    expect(view.container.textContent).toBe('1 turns · 1 steps| Input 0 tok · Output 7 tok| ≈ ¥0.000031')
   })
 
   it('includes cache writes in billed input and the cache-hit denominator', () => {
@@ -401,7 +406,7 @@ describe('StatsLine', () => {
       },
     })} />)
     expect(view.container.textContent)
-      .toBe('1 turns · 1 steps| Cache hit 45%| Input 200 tok · Output 7 tok')
+      .toBe('1 turns · 1 steps| Cache hit 45%| Input 200 tok · Output 7 tok| ≈ ¥0.000201')
   })
 
   it('renders ZERO times during streaming chunk frames (RFC hard acceptance)', () => {

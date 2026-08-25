@@ -1025,6 +1025,9 @@ describe('small branch tails', () => {
   it('StatsLine omits the cache-hit segment when no input accounting exists at all', () => {
     // Cache hit is null only when all three prompt buckets are zero (pure
     // output accounting) — any billed input makes it a real 0%.
+    // 固定到空闲时段（2026-08-01 为周六），价格组断言才与时段无关
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-01T00:00:00Z'))
     const nodes = [{
       kind: 'assistant', seq: 1, time: 1_000, turn: 1, step: 1, blocks: [], usage: { outputTokens: 10 },
     }] as const
@@ -1039,6 +1042,6 @@ describe('small branch tails', () => {
           : undefined}
       />,
     )
-    expect(view.container.textContent).toBe('1 轮 · 1 步| 输入 0 tok · 输出 10 tok')
+    expect(view.container.textContent).toBe('1 轮 · 1 步| 输入 0 tok · 输出 10 tok| ≈ ¥0.000045')
   })
 })

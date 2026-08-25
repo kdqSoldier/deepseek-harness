@@ -12,6 +12,7 @@ import type { ContextPressureProjection, TokenUsageProjection } from '@deepseek-
 import type { ComposerBarProps } from '../contract/slots.ts'
 import { formatTokensPerSecond } from './message-chrome.ts'
 import { assistantStepReading } from './turn-metrics.ts'
+import { estimateCost, formatYuan, modelPrice } from './pricing.ts'
 import css from './StatsLine.module.css'
 
 interface WindowStats {
@@ -99,6 +100,23 @@ export function formatDuration(ms: number): string {
   if (s < 60) return `${Math.round(s * 10) / 10}s`
   const whole = Math.round(s)
   return `${Math.floor(whole / 60)}m${whole % 60}s`
+}
+
+/**
+ * Newest model id seen in the loaded window: the last assistant node that
+ * carries provenance. Absent provenance falls back to undefined, which the
+ * price table resolves to its fallback price.
+ * @param nodes - conversation snapshot nodes.
+ * @returns model id, or undefined when none is recorded in the window.
+ */
+export function newestModel(nodes: ConversationSnapshot['nodes']): string | undefined {
+  for (let i = nodes.length - 1; i >= 0; i -= 1) {
+    const node = nodes[i]
+    if (node !== undefined && node.kind === 'assistant' && node.provenance !== undefined) {
+      return node.provenance.model
+    }
+  }
+  return undefined
 }
 
 /** Round a cache-read ratio to an integer percentage, with positive ties rounded up. */
@@ -250,6 +268,19 @@ export const StatsLine = memo(function StatsLine({ useSession, useProjection, t 
       input: formatTokens(billedInputTokens(usage)),
       output: formatTokens(usage.outputTokens),
     }))
+    // Estimated cost rides the same durable projection buckets, priced per the
+    // newest model seen in the loaded window (fallback price for unknown
+    // models). It is an estimate only — official prices change and DeepSeek
+    // bills by peak/off-peak Beijing time, which modelPrice() already applies.
+    const price = modelPrice(newestModel(settledNodes))
+    const cost = estimateCost(
+      usage.uncachedInputTokens,
+      usage.cacheReadTokens,
+      usage.cacheWriteTokens,
+      usage.outputTokens,
+      price,
+    )
+    groups.push(t('stats.cost', { amount: formatYuan(cost) }))
   }
   const line = groups.join(' | ')
   // The row elides with ellipsis when overlong; a delayed hover tooltip carries
